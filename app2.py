@@ -1,7 +1,9 @@
 #DANI'S CODE:
 import os
 import json
+import base64
 import requests
+from app1 import shopping_agent
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
@@ -14,45 +16,109 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 WARDROBE_FILE = "wardrobe.json"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-def get_current_city():
-    """
-    Detect the user's city using their IP address.
-    """
-
+def get_current_location():
     try:
-        response = requests.get("http://ip-api.com/json", timeout=5)
+        response = requests.get("https://ipinfo.io/json", timeout=5)
 
         data = response.json()
 
-        if data["status"] == "success":
-            return data["city"]
+        print(data)   # <-- ADD THIS
 
-        return "Tel Aviv"
+        location = data["loc"].split(",")
 
-    except Exception:
-        return "Tel Aviv"
+        latitude = location[0]
+        longitude = location[1]
 
-def get_weather(city):
+        print(latitude, longitude)   # <-- ADD THIS
+
+        return latitude, longitude
+
+    except Exception as e:
+        print(e)
+        return None, None
+
+def get_weather(lat, lon):
 
     url = (
         f"https://api.openweathermap.org/data/2.5/weather"
-        f"?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
+        f"?lat={lat}"
+        f"&lon={lon}"
+        f"&appid={OPENWEATHER_API_KEY}"
+        f"&units=metric"
     )
 
     response = requests.get(url)
 
-    print("Status Code:", response.status_code)
-    print(response.text)
-
     data = response.json()
 
     if response.status_code != 200:
-        return "Weather unavailable"
+        print("Status:", response.status_code)
+        print("Response:", data)
+        return None
 
     return {
+        "city": data["name"],
         "temperature": data["main"]["temp"],
-        "condition": data["weather"][0]["main"]
+        "feels_like": data["main"]["feels_like"],
+        "humidity": data["main"]["humidity"],
+        "condition": data["weather"][0]["main"],
+        "description": data["weather"][0]["description"]
     }
+
+def analyze_image(image_path):
+
+    with open(image_path, "rb") as image_file:
+        image_data = base64.b64encode(
+            image_file.read()
+        ).decode("utf-8")
+
+
+    response = client.messages.create(
+
+        model="claude-3-5-sonnet-20241022",
+
+        max_tokens=300,
+
+        messages=[
+
+            {
+                "role": "user",
+                "content":[
+
+                    {
+                        "type":"text",
+                        "text":
+                        """
+                        Analyze this clothing image.
+                        Describe:
+                        - clothing type
+                        - color
+                        - style
+                        - material if possible
+                        - occasion
+
+                        Give only a short shopping description.
+                        """
+                    },
+
+                    {
+                        "type":"image",
+                        "source":{
+                            "type":"base64",
+                            "media_type":"image/jpeg",
+                            "data":image_data
+                        }
+                    }
+
+                ]
+            }
+
+        ]
+
+    )
+
+
+    return response.content[0].text
 
 def save_item(item):
     try:
@@ -92,14 +158,19 @@ def show_wardrobe():
 
 def run_chat():
     print("Welcome to Caissy 👗")
-    city = get_current_city()
-    print("Detected city:", city)
-    weather = get_weather(city)
+    lat, lon = get_current_location()
+
+    print("Latitude:", lat)
+    print("Longitude:", lon)
+
+    weather = get_weather(lat, lon)
+
     print("Weather:", weather)
     print("Type 'exit' to quit.\n")
 
     system_message = """
 You are Caissy, a Digital Wardrobe Agent.
+You receive the user's current weather inside every user message under the heading "Current weather".
 
 Your job is to:
 - Manage the user's wardrobe.
@@ -107,16 +178,17 @@ Your job is to:
 - Never recommend clothing that is not in the wardrobe unless marked as a suggestion. 
 - ask about the occasion and the user's preferences before making recommendations.
 
+IMPORTANT:
+- The weather information is already provided to you.
+- Never say you don't have access to real-time weather.
+- Always use the "Current weather" data when answering.
+- If the weather says temperature, condition, humidity, etc., use those values in your recommendations.
+- Only say weather is unavailable if "Current weather" is None.
+
 Always respond in this format:
-
-[Summary]:
-One sentence repeating what the user asked.
-
-[Response]:
-Provide wardrobe updates and outfit recommendations.
-
-[Next Step]:
-Suggest one clear next action.
+1.One sentence repeating what the user asked. (the summary)
+2.Provide wardrobe updates and outfit recommendations.(the response)
+3.Suggest one clear next action. (the next step)
 """
 #after conecting 2 agents change the system message.
     history = []
@@ -128,7 +200,7 @@ Suggest one clear next action.
             print("Goodbye!")
             break
 
-        weather = get_weather(city)
+        weather = get_weather(lat, lon)
         wardrobe = load_wardrobe()
 
         history.append({
