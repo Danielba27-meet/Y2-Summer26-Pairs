@@ -3,7 +3,6 @@ import os
 import json
 import base64
 import requests
-from app1 import shopping_agent
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
@@ -16,35 +15,11 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 WARDROBE_FILE = "wardrobe.json"
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-def get_current_location():
-    try:
-        response = requests.get("https://ipinfo.io/json", timeout=5)
-
-        data = response.json()
-
-        print(data)   # <-- ADD THIS
-
-        location = data["loc"].split(",")
-
-        latitude = location[0]
-        longitude = location[1]
-
-        print(latitude, longitude)   # <-- ADD THIS
-
-        return latitude, longitude
-
-    except Exception as e:
-        print(e)
-        return None, None
-
-def get_weather(lat, lon):
+def get_weather(city):
 
     url = (
         f"https://api.openweathermap.org/data/2.5/weather"
-        f"?lat={lat}"
-        f"&lon={lon}"
-        f"&appid={OPENWEATHER_API_KEY}"
-        f"&units=metric"
+        f"?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
     )
 
     response = requests.get(url)
@@ -52,8 +27,7 @@ def get_weather(lat, lon):
     data = response.json()
 
     if response.status_code != 200:
-        print("Status:", response.status_code)
-        print("Response:", data)
+        print("Weather Error:", data)
         return None
 
     return {
@@ -158,12 +132,10 @@ def show_wardrobe():
 
 def run_chat():
     print("Welcome to Caissy 👗")
-    lat, lon = get_current_location()
 
-    print("Latitude:", lat)
-    print("Longitude:", lon)
 
-    weather = get_weather(lat, lon)
+    print("getting weather")
+    weather = get_weather("modiin")  # Replace with your city or use lat/lon for more accuracy
 
     print("Weather:", weather)
     print("Type 'exit' to quit.\n")
@@ -200,7 +172,7 @@ Always respond in this format:
             print("Goodbye!")
             break
 
-        weather = get_weather(lat, lon)
+        weather = get_weather("modiin")  # Replace with your city or use lat/lon for more accuracy
         wardrobe = load_wardrobe()
 
         history.append({
