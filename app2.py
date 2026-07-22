@@ -39,13 +39,16 @@ def get_weather(city):
         "description": data["weather"][0]["description"]
     }
 
-def analyze_image(image_path):
+def analyze_image(image_url):
 
-    with open(image_path, "rb") as image_file:
-        image_data = base64.b64encode(
-            image_file.read()
-        ).decode("utf-8")
+    response = requests.get(image_url)
 
+    if response.status_code != 200:
+        return "Failed to download image."
+
+    image_data = base64.b64encode(response.content).decode("utf-8")
+
+    content_type = response.headers.get("Content-Type", "image/jpeg")
 
     response = client.messages.create(
 
@@ -57,30 +60,30 @@ def analyze_image(image_path):
 
             {
                 "role": "user",
-                "content":[
+                "content": [
 
                     {
-                        "type":"text",
-                        "text":
-                        """
-                        Analyze this clothing image.
-                        Describe:
-                        - clothing type
-                        - color
-                        - style
-                        - material if possible
-                        - occasion
+                        "type": "text",
+                        "text": """
+Analyze this clothing image.
 
-                        Give only a short shopping description.
-                        """
+Describe:
+- clothing type
+- color
+- style
+- material if possible
+- occasion
+
+Give only a short shopping description.
+"""
                     },
 
                     {
-                        "type":"image",
-                        "source":{
-                            "type":"base64",
-                            "media_type":"image/jpeg",
-                            "data":image_data
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": content_type,
+                            "data": image_data
                         }
                     }
 
@@ -90,7 +93,6 @@ def analyze_image(image_path):
         ]
 
     )
-
 
     return response.content[0].text
 
@@ -168,11 +170,17 @@ Always respond in this format:
     while True:
         user_input = input(">> ")
 
+        image_url = input("Image URL (press Enter to skip): ")
+
+        if image_url:
+            description = analyze_image(image_url)
+            print(description)
+
         if user_input.lower() == "exit":
             print("Goodbye!")
             break
 
-        weather = get_weather("modiin")  # Replace with your city or use lat/lon for more accuracy
+        weather = get_weather("Jerusalem")  # Replace with your city or use lat/lon for more accuracy
         wardrobe = load_wardrobe()
 
         history.append({
