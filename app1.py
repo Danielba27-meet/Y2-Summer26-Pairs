@@ -1,302 +1,606 @@
-def shopping_agent():
+# YASMINE'S SHOPPING AGENT
 
-    import os
-    import base64
-    import requests
+import os
+import base64
+import requests
 
-    from serpapi import GoogleSearch
-    from anthropic import Anthropic
-    from dotenv import load_dotenv
+from serpapi import GoogleSearch
+from anthropic import Anthropic
+from dotenv import load_dotenv
 
-    from app2 import load_wardrobe
+from app2 import (
+    save_product_to_wardrobe,
+    load_wardrobe
+)
 
-    load_dotenv()
 
-    client = Anthropic(
-        api_key=os.getenv("ANTHROPIC_API_KEY")
+# -----------------------------------
+# Setup
+# -----------------------------------
+
+load_dotenv()
+
+
+client = Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY")
+)
+
+
+SERPAPI_API_KEY = os.getenv(
+    "SERPAPI_API_KEY"
+)
+
+
+
+
+# -----------------------------------
+# Search Products
+# -----------------------------------
+
+def search_products(query):
+
+
+    print(
+        "\n🔎 Searching:",
+        query
     )
 
-    # -----------------------------------
-    # Search Products
-    # -----------------------------------
 
-    def search_products(query):
+    params = {
 
-        params = {
-            "engine": "google_shopping",
-            "q": query,
-            "api_key": os.getenv("SERPAPI_API_KEY"),
-            "gl": "il",
-            "hl": "en",
-            "currency": "ILS",
-            "num": 10
-        }
+        "engine": "google_shopping",
 
-        try:
+        "q": query,
 
-            search = GoogleSearch(params)
+        "api_key": SERPAPI_API_KEY,
 
-            results = search.get_dict()
+        "gl": "il",
 
-            shopping_results = results.get(
-                "shopping_results",
-                []
+        "hl": "en",
+
+        "currency": "ILS",
+
+        "num": 10
+    }
+
+
+
+    try:
+
+
+        search = GoogleSearch(
+            params
+        )
+
+
+        results = search.get_dict()
+
+
+
+        if "error" in results:
+
+            print(
+                "❌ SerpAPI Error:"
             )
 
-            products = []
-
-            for item in shopping_results[:5]:
-
-                link = (
-                    item.get("product_link")
-                    or item.get("offer_link")
-                    or item.get("merchant_link")
-                    or item.get("link")
-                    or item.get("redirect_link")
-                    or "No link available"
-                )
-
-                products.append({
-
-                    "title": item.get(
-                        "title",
-                        "Unknown Product"
-                    ),
-
-                    "price": item.get(
-                        "price",
-                        "Unknown"
-                    ),
-
-                    "store": item.get(
-                        "source",
-                        "Unknown Store"
-                    ),
-
-                    "link": link
-
-                })
-
-            return products
-
-        except Exception as e:
-
-            print("\nSearch Error:", e)
+            print(
+                results["error"]
+            )
 
             return []
 
 
-    # -----------------------------------
-    # Analyze Clothing Image
-    # -----------------------------------
 
-    def analyze_image(image_bytes):
+        shopping_results = results.get(
+            "shopping_results",
+            []
+        )
 
-        image_data = base64.b64encode(
-            image_bytes
-        ).decode("utf-8")
 
-        response = client.messages.create(
 
-            model="claude-sonnet-4-5",
+        products = []
 
-            max_tokens=300,
 
-            messages=[
 
-                {
+        for item in shopping_results[:5]:
 
-                    "role": "user",
 
-                    "content": [
+            products.append({
 
-                        {
+                "title":
+                    item.get(
+                        "title",
+                        "Unknown"
+                    ),
 
-                            "type": "text",
+                "price":
+                    item.get(
+                        "price",
+                        "Unknown"
+                    ),
 
-                            "text": """
-You are a fashion shopping assistant.
+                "store":
+                    item.get(
+                        "source",
+                        "Unknown"
+                    ),
 
-Look at this image.
+                "link":
+                    item.get(
+                        "product_link",
+                        "No link"
+                    )
+
+            })
+
+
+
+        return products
+
+
+
+    except Exception as e:
+
+
+        print(
+            "Search error:",
+            e
+        )
+
+
+        return []
+
+
+
+
+
+
+
+# -----------------------------------
+# Download Image
+# -----------------------------------
+
+def download_image(url):
+
+
+    try:
+
+
+        response = requests.get(
+            url,
+            timeout=15
+        )
+
+
+        print(
+            "Image status:",
+            response.status_code
+        )
+
+        print(
+            "Image type:",
+            response.headers.get(
+                "Content-Type"
+            )
+        )
+
+
+
+        response.raise_for_status()
+
+
+
+        return response.content
+
+
+
+    except Exception as e:
+
+
+        print(
+            "Image error:",
+            e
+        )
+
+
+        return None
+
+
+
+
+
+
+# -----------------------------------
+# Claude Vision
+# -----------------------------------
+
+def analyze_image(image_bytes):
+
+
+    image_data = base64.b64encode(
+        image_bytes
+    ).decode(
+        "utf-8"
+    )
+
+
+
+    response = client.messages.create(
+
+        model="claude-3-5-sonnet-20241022",
+
+        max_tokens=300,
+
+
+        messages=[
+
+            {
+
+                "role":"user",
+
+                "content":[
+
+
+                    {
+
+                        "type":"text",
+
+                        "text":
+"""
+Your name is Blair. are a fashion shopping assistant.
+you are an expert in fashion and shopping. You know everything about fashion trends, styles, and brands. You are very helpful and provide detailed information about clothing items, including their features, materials, and styling tips. 
+you know everything about the show "gossip girl".
+you finish every conversation with "XOXO ICONE girlll" and with a fashion tip.
+
+Look at this clothing image.
 
 Return ONLY a Google Shopping search query.
 
-Examples:
+Example:
 
-black nike hoodie
+pink jeans women
 
-white adidas sneakers
+black hoodie
 
-beige oversized knitted sweater
-
-red floral maxi dress
-
-Do not explain.
-
-Only return the search keywords.
+white sneakers
 """
 
-                        },
+                    },
 
-                        {
 
-                            "type": "image",
+                    {
 
-                            "source": {
+                        "type":"image",
 
-                                "type": "base64",
+                        "source":{
 
-                                "media_type": "image/jpeg",
+                            "type":"base64",
 
-                                "data": image_data
+                            "media_type":"image/jpeg",
 
-                            }
+                            "data":image_data
 
                         }
 
-                    ]
+                    }
 
-                }
+                ]
 
-            ]
+            }
 
+        ]
+
+    )
+
+
+
+    query = response.content[0].text.strip()
+
+
+    print(
+        "🤖 Claude:",
+        query
+    )
+
+
+    return query
+
+
+
+
+
+
+
+# -----------------------------------
+# Display Products
+# -----------------------------------
+
+def show_products(products):
+
+
+    if not products:
+
+        print(
+            "No products found."
         )
 
-        return response.content[0].text.strip()
+        return
+
+
+
+    print(
+        "\n🛍 Products:"
+    )
+
+
+
+    for i,product in enumerate(
+        products,
+        1
+    ):
+
+        print(
+            "="*50
+        )
+
+
+        print(
+            f"{i}. {product['title']}"
+        )
+
+
+        print(
+            "Price:",
+            product["price"]
+        )
+
+
+        print(
+            "Store:",
+            product["store"]
+        )
+
+
+        print(
+            "Link:",
+            product["link"]
+        )
+
+
+
+
+
+
+
+# -----------------------------------
+# Shopping Agent
+# -----------------------------------
+
+def run_chat():
+
+
+    print(
+"""
+================================
+Welcome to StyleFinder 🛍
+================================
+
+Commands:
+
+image  - search from image
+switch - change agent
+exit   - quit
+
+"""
+    )
+
+
+    last_products = []
+
+    selected_product = None
+
+
+
+
+    while True:
+
+
+        user_input = input(
+            "\nYou: "
+        ).strip()
+
+
+
+        # EXIT
+
+        if user_input.lower()=="exit":
+
+            return "exit"
+
+
+
+        # SWITCH
+
+        if user_input.lower()=="switch":
+
+            return "switch"
+
+
+
+
+
         # -----------------------------------
-    # Download Image
-    # -----------------------------------
+        # Buying detection
+        # -----------------------------------
 
-    def download_image(image_url):
+        buy_phrases = [
 
-        try:
+            "i bought it",
 
-            response = requests.get(
-                image_url,
-                timeout=15
-            )
+            "i bought this",
 
-            response.raise_for_status()
+            "i purchased it",
 
-            return response.content
+            "save it",
 
-        except requests.exceptions.RequestException as e:
+            "save this",
 
-            print("Couldn't download image.")
-            print(e)
+            "add it",
 
-            return None
+            "add this",
 
+            "put it in my wardrobe",
 
-    # -----------------------------------
-    # Display Products
-    # -----------------------------------
+            "keep it"
 
-    def show_products(products):
-
-        if not products:
-
-            print(" Sorry, I couldn't find any matching products.")
-
-            return
-
-        print(" are the best matches I found:")
-
-        for i, product in enumerate(products, start=1):
-
-            print("=" * 60)
-
-            print(f"{i}. {product['title']}")
-            print(f" Price : {product['price']}")
-            print(f" Store : {product['store']}")
-            print(f" Link  : {product['link']}")
-
-        print("\nHappy shopping! ")
+        ]
 
 
-    # -----------------------------------
-    # Main Chat
-    # -----------------------------------
 
-    def run_chat():
+        if any(
+            phrase in user_input.lower()
+            for phrase in buy_phrases
+        ):
 
-        wardrobe = load_wardrobe()
 
-        print("\n====================================")
-        print("Welcome to StyleFinder!")
-        print("====================================")
+            if selected_product is None:
 
-        print("\nYour wardrobe contains {len(wardrobe)} items ")
 
-        print("\nYou can:")
-
-        print("- Describe what you're looking for")
-        print("- Type image to search using an image URL")
-        print("- Type exit to quit")
-
-        while True:
-
-            user_input = input("You: ").strip()
-
-            if not user_input:
-
-                continue
-
-            if user_input.lower() == "exit":
-
-                print("\nSee you next time ")
-
-                break
-
-            if user_input.lower() == "image":
-
-                image_url = input(
-                    "\nPaste the image URL:\n> "
-                ).strip()
-
-                image_bytes = download_image(
-                    image_url
+                print(
+                    "Please select a product first."
                 )
 
-                if image_bytes is None:
-
-                    continue
-
-                print("\n Analyzing image...")
-                try:
-
-                    search_query = analyze_image(
-                        image_bytes
-                    )
-
-                    print("\nDetected item:")
-                    print(search_query)
-
-                    print("\nSearching for similar products...")
-
-                    products = search_products(
-                        search_query
-                    )
-
-                    show_products(
-                        products
-                    )
-
-                except Exception as e:
-
-                    print("\nImage analysis failed.")
-
-                    print(e)
 
                 continue
 
-            print("\nSearching...")
 
-            products = search_products(
-                user_input
+
+
+            print(
+                "\nAdding to wardrobe..."
             )
 
-            show_products(
-                products
+
+
+            item = save_product_to_wardrobe(
+
+                selected_product["title"]
+
             )
-    run_chat()
+
+
+
+            print(
+                "✅ Added:"
+            )
+
+
+            print(item)
+
+
+
+            continue
+
+
+
+
+
+
+
+        # -----------------------------------
+        # Image Search
+        # -----------------------------------
+
+        if user_input.lower()=="image":
+
+
+            image_url = input(
+                "\nPaste image URL:\n> "
+            )
+
+
+
+            image = download_image(
+                image_url
+            )
+
+
+
+            if image:
+
+
+                query = analyze_image(
+                    image
+                )
+
+
+                last_products = search_products(
+                    query
+                )
+
+
+                show_products(
+                    last_products
+                )
+
+
+
+            continue
+
+
+
+
+
+
+        # -----------------------------------
+        # Normal Search
+        # -----------------------------------
+
+
+        last_products = search_products(
+            user_input
+        )
+
+
+        show_products(
+            last_products
+        )
+
+
+
+        if last_products:
+
+
+            choice = input(
+                "\nWhich item interests you? (number or Enter): "
+            )
+
+
+
+            if choice.isdigit():
+
+
+                selected_product = last_products[
+                    int(choice)-1
+                ]
+
+
+                print(
+                    "\nSelected:"
+                )
+
+
+                print(
+                    selected_product["title"]
+                )
+
+
+
+                print(
+"""
+You can continue asking questions.
+
+When you buy it say:
+"I bought it"
+"""
+                )

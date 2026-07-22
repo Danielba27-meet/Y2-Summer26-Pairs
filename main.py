@@ -1,19 +1,49 @@
-#how to import python file
-from app1 import shopping_agent
-from app2 import run_chat
+from app1 import run_chat as Yasmines_agent
+from app2 import run_chat as Danis_agent
 
-choice = input("""
+
+active_agent = "shopping"
+
+print("""
 Choose an agent:
 1. Shopping Agent
 2. Wardrobe Agent
+""")
 
-> """)
+choice = input("> ")
 
 if choice == "1":
-    shopping_agent()
-
-elif choice == "2":
-    run_chat()
-
+    active_agent = "shopping"
 else:
-    print("Invalid choice.")
+    active_agent = "wardrobe"
+
+
+print("\nType 'switch' anytime to change agents.")
+print("Type 'exit' to quit.\n")
+
+
+while True:
+
+    if active_agent == "shopping":
+
+        result = Yasmines_agent()
+
+    else:
+
+        result = Danis_agent()
+
+
+    if result == "exit":
+        print("Goodbye!")
+        break
+
+
+    if result == "switch":
+
+        if active_agent == "shopping":
+            active_agent = "wardrobe"
+            print("\nSwitched to Wardrobe Agent 👗\n")
+
+        else:
+            active_agent = "shopping"
+            print("\nSwitched to Shopping Agent 🛍\n")

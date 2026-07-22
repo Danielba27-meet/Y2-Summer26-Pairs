@@ -1,19 +1,33 @@
-#DANI'S CODE:
+# DANI'S WARDROBE AGENT
+
 import os
 import json
 import base64
 import requests
+
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
-# Load environment variables
+
 load_dotenv()
 
-# Create Anthropic client
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+client = Anthropic(
+    api_key=os.getenv("ANTHROPIC_API_KEY")
+)
+
 
 WARDROBE_FILE = "wardrobe.json"
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+
+OPENWEATHER_API_KEY = os.getenv(
+    "OPENWEATHER_API_KEY"
+)
+
+
+
+# -----------------------------------
+# Weather
+# -----------------------------------
 
 def get_weather(city):
 
@@ -22,204 +36,443 @@ def get_weather(city):
         f"?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
     )
 
+
     response = requests.get(url)
 
     data = response.json()
 
+
     if response.status_code != 200:
-        print("Weather Error:", data)
         return None
 
+
     return {
+
         "city": data["name"],
+
         "temperature": data["main"]["temp"],
-        "feels_like": data["main"]["feels_like"],
-        "humidity": data["main"]["humidity"],
+
         "condition": data["weather"][0]["main"],
+
         "description": data["weather"][0]["description"]
+
     }
 
-def analyze_image(image_url):
 
-    response = requests.get(image_url)
 
-    if response.status_code != 200:
-        return "Failed to download image."
 
-    image_data = base64.b64encode(response.content).decode("utf-8")
 
-    content_type = response.headers.get("Content-Type", "image/jpeg")
+# -----------------------------------
+# Wardrobe Storage
+# -----------------------------------
+
+def save_item(item):
+
+
+    try:
+
+        with open(
+            WARDROBE_FILE,
+            "r"
+        ) as file:
+
+            wardrobe = json.load(file)
+
+
+    except:
+
+        wardrobe = []
+
+
+
+    wardrobe.append(item)
+
+
+
+    with open(
+        WARDROBE_FILE,
+        "w"
+    ) as file:
+
+        json.dump(
+            wardrobe,
+            file,
+            indent=4
+        )
+
+
+    print(
+        "✅ Item saved to wardrobe"
+    )
+
+
+
+
+
+def load_wardrobe():
+
+    try:
+
+        with open(
+            WARDROBE_FILE,
+            "r"
+        ) as file:
+
+            return json.load(file)
+
+
+    except:
+
+        return []
+
+
+
+
+
+
+def show_wardrobe():
+
+
+    wardrobe = load_wardrobe()
+
+
+    if not wardrobe:
+
+        print(
+            "Your wardrobe is empty."
+        )
+
+        return
+
+
+
+    print(
+        "\nYour wardrobe:"
+    )
+
+
+    for i,item in enumerate(
+        wardrobe,
+        1
+    ):
+
+        print(
+            f"{i}. {item['color']} {item['type']} ({item['category']})"
+        )
+
+
+
+
+
+
+
+# -----------------------------------
+# Communication From Shopping Agent
+# -----------------------------------
+
+def save_product_to_wardrobe(product_name):
+
+
+    prompt = f"""
+
+Convert this shopping product into wardrobe JSON.
+
+Product:
+{product_name}
+
+
+Return ONLY:
+
+{{
+"type":"",
+"color":"",
+"category":""
+}}
+
+
+Categories:
+
+tops
+bottoms
+dresses
+shoes
+outerwear
+accessories
+
+"""
+
+
 
     response = client.messages.create(
 
-        model="claude-3-5-sonnet-20241022",
+        model="claude-haiku-4-5-20251001",
 
-        max_tokens=300,
+        max_tokens=200,
 
         messages=[
 
             {
-                "role": "user",
-                "content": [
 
-                    {
-                        "type": "text",
-                        "text": """
-Analyze this clothing image.
+                "role":"user",
 
-Describe:
-- clothing type
-- color
-- style
-- material if possible
-- occasion
+                "content":prompt
 
-Give only a short shopping description.
-"""
-                    },
-
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": content_type,
-                            "data": image_data
-                        }
-                    }
-
-                ]
             }
 
         ]
 
     )
 
-    return response.content[0].text
 
-def save_item(item):
-    try:
-        with open(WARDROBE_FILE, "r") as file:
-            wardrobe = json.load(file)
-    except FileNotFoundError:
-        wardrobe = []
-
-    wardrobe.append(item)
-
-    with open(WARDROBE_FILE, "w") as file:
-        json.dump(wardrobe, file, indent=4)
-
-    print("Item saved to wardrobe 👑")
+    text = response.content[0].text.strip()
 
 
-def load_wardrobe():
-    try:
-        with open(WARDROBE_FILE, "r") as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return []
+
+    # remove markdown formatting
+
+    text = text.replace(
+        "```json",
+        ""
+    )
+
+    text = text.replace(
+        "```",
+        ""
+    )
+
+    text = text.strip()
 
 
-def show_wardrobe():
-    wardrobe = load_wardrobe()
 
-    if not wardrobe:
-        print("Your wardrobe is empty.")
-        return
+    item = json.loads(
+        text
+    )
 
-    print("\nYour Wardrobe:\n")
 
-    for i, item in enumerate(wardrobe, start=1):
-        print(f"{i}. {item['color']} {item['type']} ({item['category']})")
 
+    save_item(item)
+
+
+    return item
+
+
+
+
+
+
+
+# -----------------------------------
+# Image Analysis
+# -----------------------------------
+
+def analyze_image(image_url):
+
+
+    response = requests.get(
+        image_url
+    )
+
+
+    if response.status_code != 200:
+
+        return None
+
+
+
+    image_data = base64.b64encode(
+        response.content
+    ).decode(
+        "utf-8"
+    )
+
+
+
+    result = client.messages.create(
+
+        model="claude-3-5-sonnet-20241022",
+
+        max_tokens=300,
+
+
+        messages=[
+
+            {
+
+                "role":"user",
+
+                "content":[
+
+
+                    {
+
+                        "type":"text",
+
+                        "text":
+"""
+Analyze this clothing image.
+
+Describe the clothing,
+color,
+style,
+and occasion.
+"""
+
+                    },
+
+
+                    {
+
+                        "type":"image",
+
+                        "source":{
+
+                            "type":"base64",
+
+                            "media_type":"image/jpeg",
+
+                            "data":image_data
+
+                        }
+
+                    }
+
+                ]
+
+            }
+
+        ]
+
+    )
+
+
+    return result.content[0].text
+
+
+
+
+
+
+
+# -----------------------------------
+# Wardrobe Agent Chat
+# -----------------------------------
 
 def run_chat():
-    print("Welcome to Caissy 👗")
 
 
-    print("getting weather")
-    weather = get_weather("Jerusalem")  # Replace with your city or use lat/lon for more accuracy
-
-    print("Weather:", weather)
-    print("Type 'exit' to quit.\n")
-
-    system_message = """
-You are Caissy, a Digital Wardrobe Agent.
-You receive the user's current weather inside every user message under the heading "Current weather".
-
-Your job is to:
-- Manage the user's wardrobe.
-- Recommend outfits based on the wardrobe, weather, and occasion.
-- Never recommend clothing that is not in the wardrobe unless marked as a suggestion. 
-- ask about the occasion and the user's preferences before making recommendations.
-
-IMPORTANT:
-- The weather information is already provided to you.
-- Never say you don't have access to real-time weather.
-- Always use the "Current weather" data when answering.
-- If the weather says temperature, condition, humidity, etc., use those values in your recommendations.
-- Only say weather is unavailable if "Current weather" is None.
-
-Always respond in this format:
-1.One sentence repeating what the user asked. (the summary)
-2.Provide wardrobe updates and outfit recommendations.(the response)
-3.Suggest one clear next action. (the next step)
+    print(
 """
-#after conecting 2 agents change the system message.
+==============================
+Welcome to Serena 👗
+==============================
+
+Commands:
+switch - change agent
+exit - quit
+
+"""
+    )
+
+
+
     history = []
 
+
+
+    system_message = """
+
+You are serena, a Digital Wardrobe Agent.
+
+Help the user manage their wardrobe.
+
+Recommend outfits using saved clothes.
+you are an serena from the show "gossip girl" and you are a fashion expert.
+you know everyting about the show, your king and love using emojis. every conversation you finish with "XOXO ICONE girlll" and with a fasion tip.
+
+"""
+
+
+
     while True:
-        user_input = input(">> ")
 
-        image_url = input("Image URL (press Enter to skip): ")
 
-        if image_url:
-            description = analyze_image(image_url)
-            print(description)
+        user_input = input(
+            "\nYou: "
+        )
 
-        if user_input.lower() == "exit":
-            print("Goodbye!")
-            break
 
-        weather = get_weather("Jerusalem")  # Replace with your city or use lat/lon for more accuracy
+        if user_input.lower()=="exit":
+
+            return "exit"
+
+
+
+        if user_input.lower()=="switch":
+
+            return "switch"
+
+
+
+
         wardrobe = load_wardrobe()
 
+        weather = get_weather(
+            "Jerusalem"
+        )
+
+
         history.append({
-            "role": "user",
-            "content": f"""
-User request:
+
+            "role":"user",
+
+            "content":f"""
+
+User:
 {user_input}
 
-Current weather:
+
+Weather:
 {weather}
 
-Current wardrobe:
-{json.dumps(wardrobe, indent=2)}
+
+Wardrobe:
+{json.dumps(wardrobe,indent=2)}
+
 """
+
         })
 
-        try:
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1000,
-                temperature=0.7,
-                system=system_message,
-                messages=history
-            )
-
-            reply = response.content[0].text
-
-            print("\nCaissy:")
-            print(reply)
-            print()
-
-            history.append({
-                "role": "assistant",
-                "content": reply
-            })
-
-        except Exception as e:
-            print(f"Error: {e}")
 
 
-if __name__ == "__main__":
-    run_chat()
+        response = client.messages.create(
+
+            model="claude-haiku-4-5-20251001",
+
+            max_tokens=1000,
+
+            system=system_message,
+
+            messages=history
+
+        )
+
+
+        reply = response.content[0].text
+
+
+
+        print(
+            "\nCaissy:"
+        )
+
+        print(reply)
+
+
+
+        history.append({
+
+            "role":"assistant",
+
+            "content":reply
+
+        })
