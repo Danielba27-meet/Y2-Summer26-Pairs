@@ -135,7 +135,7 @@ def run_chat():
 
 
     print("getting weather")
-    weather = get_weather("modiin")  # Replace with your city or use lat/lon for more accuracy
+    weather = get_weather("Jerusalem")  # Replace with your city or use lat/lon for more accuracy
 
     print("Weather:", weather)
     print("Type 'exit' to quit.\n")
@@ -172,7 +172,7 @@ Always respond in this format:
             print("Goodbye!")
             break
 
-        weather = get_weather("modiin")  # Replace with your city or use lat/lon for more accuracy
+        weather = get_weather("Jerusalem")  # Replace with your city or use lat/lon for more accuracy
         wardrobe = load_wardrobe()
 
         history.append({
